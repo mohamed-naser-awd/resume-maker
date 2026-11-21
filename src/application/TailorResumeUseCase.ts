@@ -8,6 +8,8 @@ import type { ProfileRepository } from '@/ports/repositories';
 import type { RenderedDocument, ResumeRenderer } from '@/ports/ResumeRenderer';
 import type { Clock } from '@/ports/system';
 import type { AccomplishmentService } from './AccomplishmentService';
+import type { ApplicationHistoryService } from './ApplicationHistoryService';
+import type { ApplicationRecord } from '@/domain/application';
 import { RESUME_TAILOR_PROMPT } from './prompts';
 import { parseOutput, tailoredResumeSchema, toJsonSchema } from './schemas';
 import { candidateContext } from './context';
@@ -17,6 +19,7 @@ export interface TailorResumeDeps {
   profiles: ProfileRepository;
   accomplishments: AccomplishmentService;
   renderer: ResumeRenderer;
+  history: ApplicationHistoryService;
   clock: Clock;
 }
 
@@ -24,6 +27,8 @@ export interface TailorResult {
   resume: TailoredResume;
   ats: AtsReport;
   document: RenderedDocument;
+  /** History entry this resume was saved to. */
+  application: ApplicationRecord;
 }
 
 const tailoredResumeJsonSchema = toJsonSchema(tailoredResumeSchema);
@@ -81,6 +86,8 @@ export class TailorResumeUseCase {
       generatedAt: this.deps.clock().toISOString(),
     };
     const document = await this.deps.renderer.render(resume);
-    return { resume, ats: assessAts(resume), document };
+    // Every tailored resume is kept in the application history.
+    const application = await this.deps.history.recordResume(job, resume);
+    return { resume, ats: assessAts(resume), document, application };
   }
 }

@@ -2,8 +2,10 @@ import type { Accomplishment } from '@/domain/accomplishment';
 import type { ChatMessage } from '@/domain/chat';
 import { emptyProfile, type Profile } from '@/domain/profile';
 import { defaultSettings, type Settings } from '@/domain/settings';
+import type { ApplicationRecord } from '@/domain/application';
 import type {
   AccomplishmentRepository,
+  ApplicationRepository,
   ChatRepository,
   ProfileRepository,
   SettingsRepository,
@@ -63,6 +65,7 @@ const KEYS = {
   profile: 'profile',
   accomplishments: 'accomplishments',
   chat: 'chatHistory',
+  applications: 'applications',
   settings: 'settings',
 } as const;
 
@@ -86,6 +89,19 @@ export class StoreAccomplishmentRepository implements AccomplishmentRepository {
   }
   saveAll(items: Accomplishment[]): Promise<void> {
     return this.store.set(KEYS.accomplishments, items);
+  }
+}
+
+export class StoreApplicationRepository implements ApplicationRepository {
+  constructor(private readonly store: KeyValueStore) {}
+  async list(): Promise<ApplicationRecord[]> {
+    return (await this.store.get<ApplicationRecord[]>(KEYS.applications)) ?? [];
+  }
+  saveAll(records: ApplicationRecord[]): Promise<void> {
+    return this.store.set(KEYS.applications, records);
+  }
+  onChange(listener: (records: ApplicationRecord[]) => void): Unsubscribe {
+    return this.store.onChange(KEYS.applications, (v) => listener((v as ApplicationRecord[] | undefined) ?? []));
   }
 }
 

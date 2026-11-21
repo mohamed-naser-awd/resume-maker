@@ -10,6 +10,7 @@ import type { RenderedDocument, ResumeRenderer } from '@/ports/ResumeRenderer';
 import {
   InMemoryStore,
   StoreAccomplishmentRepository,
+  StoreApplicationRepository,
   StoreChatRepository,
   StoreProfileRepository,
   StoreSettingsRepository,
@@ -97,6 +98,7 @@ export function createTestContainer(opts: { llm?: FakeLLM; page?: FakePage } = {
     .register(T.profileRepo, (c) => new StoreProfileRepository(c.resolve(T.store)))
     .register(T.accomplishmentRepo, (c) => new StoreAccomplishmentRepository(c.resolve(T.store)))
     .register(T.chatRepo, (c) => new StoreChatRepository(c.resolve(T.store)))
+    .register(T.applicationRepo, (c) => new StoreApplicationRepository(c.resolve(T.store)))
     .register(T.llm, () => opts.llm ?? new FakeLLM())
     .register(T.extractor, () => new PlainTextExtractor())
     .register(T.renderer, () => new FakeRenderer())

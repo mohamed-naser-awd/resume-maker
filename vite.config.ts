@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => ({
       input: {
         sidepanel: resolve(root, 'sidepanel.html'),
         options: resolve(root, 'options.html'),
+        history: resolve(root, 'history.html'),
         background: resolve(root, 'src/extension/background.ts'),
       },
       output: {

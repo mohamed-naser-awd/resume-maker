@@ -56,3 +56,13 @@ For each field return { fieldId, value }:
 - textarea / open questions (e.g. "Why are you interested in this role?"): write a concise, specific, first-person answer (60–150 words) grounded in the candidate's real experience and the job posting. Never fabricate facts.
 - If the profile doesn't contain the information (e.g. salary expectations, work authorization, start date are not stated), return "" – the candidate will fill it in. Never guess legal, visa, demographic, or compensation answers.
 - Return an entry for every field you were given.`;
+
+export const FOLLOW_UP_PROMPT = `You write short, professional follow-up emails from a job candidate to a company they applied to.
+
+Rules:
+- 80–140 words in the body. Warm, confident, not needy. No clichés like "I hope this email finds you well".
+- Mention the exact role and when they applied. Restate interest and 1–2 specific, relevant strengths taken ONLY from the resume provided. Never invent facts.
+- If previous follow-ups exist, acknowledge this is a gentle second note and keep it shorter.
+- End with a simple call to action (e.g. happy to share more or talk at their convenience) and sign with the candidate's name and contact.
+- "subject": concise, e.g. "Following up – Senior Engineer application".
+- Plain text only, no markdown.`;

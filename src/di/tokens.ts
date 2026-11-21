@@ -1,5 +1,6 @@
 import type { AccomplishmentChatUseCase } from '@/application/AccomplishmentChatUseCase';
 import type { AccomplishmentService } from '@/application/AccomplishmentService';
+import type { ApplicationHistoryService } from '@/application/ApplicationHistoryService';
 import type { AutofillUseCase } from '@/application/AutofillUseCase';
 import type { JobService } from '@/application/JobService';
 import type { ProfileService } from '@/application/ProfileService';
@@ -10,6 +11,7 @@ import type { PageGateway } from '@/ports/PageGateway';
 import type { PageEvents } from '@/ports/PageEvents';
 import type {
   AccomplishmentRepository,
+  ApplicationRepository,
   ChatRepository,
   ProfileRepository,
   SettingsRepository,
@@ -26,6 +28,7 @@ export const TOKENS = {
   profileRepo: token<ProfileRepository>('ProfileRepository'),
   accomplishmentRepo: token<AccomplishmentRepository>('AccomplishmentRepository'),
   chatRepo: token<ChatRepository>('ChatRepository'),
+  applicationRepo: token<ApplicationRepository>('ApplicationRepository'),
   llm: token<LLMProvider>('LLMProvider'),
   extractor: token<DocumentTextExtractor>('DocumentTextExtractor'),
   renderer: token<ResumeRenderer>('ResumeRenderer'),
@@ -40,4 +43,5 @@ export const TOKENS = {
   tailor: token<TailorResumeUseCase>('TailorResumeUseCase'),
   autofill: token<AutofillUseCase>('AutofillUseCase'),
   jobs: token<JobService>('JobService'),
+  history: token<ApplicationHistoryService>('ApplicationHistoryService'),
 } as const;

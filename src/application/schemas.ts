@@ -87,6 +87,9 @@ export const fieldAnswersSchema = z.object({
 });
 export type FieldAnswersOutput = z.infer<typeof fieldAnswersSchema>;
 
+export const followUpSchema = z.object({ subject: z.string(), body: z.string() });
+export type FollowUpDraft = z.infer<typeof followUpSchema>;
+
 /** Converts a Zod schema to a strict JSON Schema (every object closed, every key required). */
 export function toJsonSchema(schema: z.ZodType): JsonSchema {
   const json = z.toJSONSchema(schema, { target: 'draft-2020-12' }) as JsonSchema;

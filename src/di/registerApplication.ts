@@ -1,5 +1,6 @@
 import { AccomplishmentChatUseCase } from '@/application/AccomplishmentChatUseCase';
 import { AccomplishmentService } from '@/application/AccomplishmentService';
+import { ApplicationHistoryService } from '@/application/ApplicationHistoryService';
 import { AutofillUseCase } from '@/application/AutofillUseCase';
 import { JobService } from '@/application/JobService';
 import { ProfileService } from '@/application/ProfileService';
@@ -32,6 +33,7 @@ export function registerApplication(c: Container): Container {
         profiles: c.resolve(T.profileRepo),
         accomplishments: c.resolve(T.accomplishmentService),
         renderer: c.resolve(T.renderer),
+        history: c.resolve(T.history),
         clock: c.resolve(T.clock),
       }),
     )
@@ -42,6 +44,15 @@ export function registerApplication(c: Container): Container {
         profiles: c.resolve(T.profileRepo),
         accomplishments: c.resolve(T.accomplishmentService),
         settings: c.resolve(T.settingsRepo),
+      }),
+    )
+    .register(T.history, (c) =>
+      new ApplicationHistoryService({
+        applications: c.resolve(T.applicationRepo),
+        renderer: c.resolve(T.renderer),
+        llm: c.resolve(T.llm),
+        idGen: c.resolve(T.idGen),
+        clock: c.resolve(T.clock),
       }),
     )
     .register(T.jobs, (c) => new JobService(c.resolve(T.page)));

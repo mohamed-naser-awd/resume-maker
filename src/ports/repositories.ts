@@ -1,4 +1,5 @@
 import type { Accomplishment } from '@/domain/accomplishment';
+import type { ApplicationRecord } from '@/domain/application';
 import type { ChatMessage } from '@/domain/chat';
 import type { Profile } from '@/domain/profile';
 import type { Settings } from '@/domain/settings';
@@ -14,6 +15,12 @@ export interface ProfileRepository {
 export interface AccomplishmentRepository {
   list(): Promise<Accomplishment[]>;
   saveAll(items: Accomplishment[]): Promise<void>;
+}
+
+export interface ApplicationRepository {
+  list(): Promise<ApplicationRecord[]>;
+  saveAll(records: ApplicationRecord[]): Promise<void>;
+  onChange(listener: (records: ApplicationRecord[]) => void): Unsubscribe;
 }
 
 export interface ChatRepository {

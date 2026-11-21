@@ -5,12 +5,14 @@ import { useService } from '../shared/services';
 import { ApplyTab } from './ApplyTab';
 import { ChatTab } from './ChatTab';
 import { ProfileTab } from './ProfileTab';
+import { HistoryView } from '../history/HistoryView';
 
-type TabId = 'apply' | 'chat' | 'profile';
+type TabId = 'apply' | 'chat' | 'profile' | 'history';
 const TABS: { id: TabId; label: string }[] = [
   { id: 'apply', label: 'Apply' },
   { id: 'chat', label: 'Accomplishments' },
   { id: 'profile', label: 'Profile' },
+  { id: 'history', label: 'History' },
 ];
 
 export function App() {
@@ -57,6 +59,9 @@ export function App() {
         </div>
         <div hidden={tab !== 'profile'} className="stack" style={{ gap: 12 }}>
           <ProfileTab />
+        </div>
+        <div hidden={tab !== 'history'} className="stack" style={{ gap: 12 }}>
+          <HistoryView compact />
         </div>
       </div>
     </div>

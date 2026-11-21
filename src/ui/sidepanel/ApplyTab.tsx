@@ -4,6 +4,7 @@ import { TOKENS } from '@/di/tokens';
 import type { AutofillResult, FillPlan, FormDetection } from '@/domain/form';
 import type { FillMode } from '@/domain/settings';
 import { isProfileEmpty } from '@/domain/profile';
+import { STATUS_LABELS, type ApplicationRecord } from '@/domain/application';
 import { FillReview } from './FillReview';
 import type { JobPosting } from '@/domain/job';
 import { resumeToPlainText } from '@/domain/resume';
@@ -21,6 +22,7 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const profiles = useService(TOKENS.profileService);
   const settingsRepo = useService(TOKENS.settingsRepo);
   const pageEvents = useService(TOKENS.pageEvents);
+  const history = useService(TOKENS.history);
 
   const [job, setJob] = useState<JobPosting | null>(null);
   const [result, setResult] = useState<TailorResult | null>(null);
@@ -30,6 +32,7 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const [plan, setPlan] = useState<FillPlan | null>(null);
   const [detected, setDetected] = useState<FormDetection | null>(null);
   const [fillMode, setFillMode] = useState<FillMode>('confirm');
+  const [application, setApplication] = useState<ApplicationRecord | null>(null);
 
   useEffect(() => {
     void profiles.get().then((p) => setHasProfile(!isProfileEmpty(p)));
@@ -49,8 +52,20 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const generate = useAction(async () => {
     if (!job) return;
     setFill(null);
-    setResult(await tailor.execute(job));
+    const out = await tailor.execute(job);
+    setResult(out);
+    setApplication(out.application);
   });
+  const markApplied = useAction(async () => {
+    if (job) setApplication(await history.markApplied(job, result?.resume ?? null));
+  });
+
+  // Show whether the current job is already in the history (e.g. applied last week).
+  useEffect(() => {
+    if (!job) return setApplication(null);
+    void history.findForJob(job).then(setApplication);
+    return history.subscribe(() => void history.findForJob(job).then(setApplication));
+  }, [history, job?.url, job?.title, job?.company]);
   /** Job context helps the AI answer open questions; try the page silently if none is set. */
   const jobContext = async () => {
     if (job) return job;
@@ -212,6 +227,30 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
         <ErrorBanner error={runFill.error ?? applyPlan.error} onDismiss={() => (runFill.clearError(), applyPlan.clearError())} onPermissionGranted={() => runFill.run(fillMode)} />
         {plan && <FillReview key={plan.items.map((i) => i.field.id).join()} plan={plan} busy={applyPlan.busy} onConfirm={(p) => applyPlan.run(p)} onCancel={() => setPlan(null)} />}
         {fill && <FillSummary fill={fill} />}
+      </section>
+
+      <section className="card">
+        <h2>4. Track it</h2>
+        {application?.appliedAt ? (
+          <div className="banner success">
+            <span>
+              {STATUS_LABELS[application.status]} · applied {new Date(application.appliedAt).toLocaleDateString()}. Follow-ups and
+              notes are in the History tab.
+            </span>
+          </div>
+        ) : (
+          <>
+            <p className="muted small">
+              {application
+                ? 'This resume is saved in History. After you submit, mark it as applied to get a follow-up reminder.'
+                : 'After you submit, mark it as applied. It goes to History with the resume you sent, so you can follow up later.'}
+            </p>
+            <button className="btn" disabled={!job || markApplied.busy} onClick={() => markApplied.run()}>
+              ✓ Mark as applied
+            </button>
+          </>
+        )}
+        <ErrorBanner error={markApplied.error} onDismiss={markApplied.clearError} />
       </section>
     </>
   );

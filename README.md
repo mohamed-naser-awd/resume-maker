@@ -6,6 +6,16 @@ Helps you apply to jobs:
 - **Accomplishments chat**: tell the bot what you've done that isn't on your resume ("I led retros and sprint planning for a team of 6"). It turns each item into a resume bullet and saves it.
 - **Apply**: on a job page, detect the posting → generate an **ATS-friendly PDF resume** tailored to that job (with a keyword-coverage check) → **fill the application form**. Filled fields get a green outline, required fields left for you get an orange one. It **never submits**.
 
+### Application history
+
+Every resume you generate is saved to **History** (a side panel tab, plus a full page via *Open full page*), together with the job posting. After submitting, press **Mark as applied** in the Apply tab or on the History card. Per application you can:
+
+- change the status (Resume ready → Applied → Followed up → Interviewing → Offer / Rejected / Withdrawn)
+- download the exact PDF you sent (regenerated from the saved resume content)
+- get a "follow-up due" flag 7 days after applying or after your last follow-up
+- **Draft follow-up**: AI writes a short email grounded in that resume and job. Copy it, send it yourself, then press *I sent it* to log it
+- keep notes (recruiter, contact email, interview dates)
+
 ### Fill modes (Settings → Autofill)
 
 - **Review first** (default): *Review & fill this page* shows every proposed value. Edit, untick, or type answers for empty fields, then press *Fill*. Nothing on the page changes before that.

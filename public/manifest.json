@@ -28,7 +28,19 @@
     "default_path": "sidepanel.html"
   },
   "options_page": "options.html",
-  "permissions": ["storage", "sidePanel", "activeTab", "scripting"],
-  "host_permissions": ["https://api.anthropic.com/*"],
-  "optional_host_permissions": ["https://*/*", "http://*/*", "https://api.openai.com/*"]
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*",
+    "https://api.openai.com/*"
+  ]
 }
