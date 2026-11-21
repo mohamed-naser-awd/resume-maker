@@ -1,4 +1,5 @@
 import type { JobPosting } from './job';
+import { jobIdentity } from './jobIdentity';
 import type { TailoredResume } from './resume';
 
 export type ApplicationStatus =
@@ -57,15 +58,8 @@ export function needsFollowUp(r: ApplicationRecord, now: Date, afterDays = FOLLO
   return !!last && daysSince(last, now) >= afterDays;
 }
 
-/** Canonical form of a job link: host + path, without query, hash, trailing slash or /apply. */
-export const normalizeUrl = (url: string) => {
-  try {
-    const u = new URL(url);
-    return `${u.host}${u.pathname}`.replace(/\/(apply|application)\/?$/i, '').replace(/\/$/, '').toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
-};
+/** Canonical job identity of a link (posting page and its /apply pages share one). */
+export const normalizeUrl = jobIdentity;
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 /** Same job = same posting URL (ignoring query and /apply suffix) or same company + title. */

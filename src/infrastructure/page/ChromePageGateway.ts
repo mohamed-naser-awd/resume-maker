@@ -1,6 +1,6 @@
 import { PageAccessError } from '@/domain/errors';
 import type { FillReport, FormField } from '@/domain/form';
-import type { JobPosting } from '@/domain/job';
+import { isReliableJob, type JobPageScan, type JobPosting } from '@/domain/job';
 import type { FillRequest, PageGateway } from '@/ports/PageGateway';
 import { fillFormInPage, type InPageAnswer } from '@/extension/content/fillForm';
 import { scanFormInPage } from '@/extension/content/scanForm';
@@ -23,15 +23,37 @@ export class ChromePageGateway implements PageGateway {
     }
   }
 
-  async readJobPosting(): Promise<JobPosting> {
-    const results = await this.run(scrapeJobInPage, []);
-    // Pick the frame with the richest description (job may be in an embedded iframe).
-    const best = results
-      .map((r) => r.result)
-      .filter((j): j is JobPosting => !!j)
-      .sort((a, b) => b.description.length - a.description.length)[0];
+  async readJobPosting(): Promise<JobPageScan> {
+    const best = pickBestScan((await this.run(scrapeJobInPage, [])).map((r) => r.result));
     if (!best) throw new PageAccessError('Could not read this page.', false);
     return best;
+  }
+
+  /** Opens the URL in a hidden tab, waits for the posting to render, scrapes it, closes the tab. */
+  async readJobPostingAt(url: string): Promise<JobPosting | null> {
+    if (!/^https?:\/\//i.test(url)) return null;
+    const origin = new URL(url).origin + '/*';
+    if (!(await chrome.permissions.contains({ origins: [origin] }))) {
+      throw new PageAccessError('Resume Maker needs permission to read the job posting page.', true);
+    }
+    const tab = await chrome.tabs.create({ url, active: false });
+    const tabId = tab.id;
+    if (tabId === undefined) return null;
+    try {
+      await waitForTabLoad(tabId, 15_000);
+      // Many boards render the description client-side: retry for a few seconds.
+      const deadline = Date.now() + 6_000;
+      let last: JobPosting | null = null;
+      while (Date.now() < deadline) {
+        const results = await this.exec(tabId, { allFrames: true }, scrapeJobInPage, []).catch(() => []);
+        last = pickBestScan(results.map((r) => r.result))?.job ?? null;
+        if (isReliableJob(last)) return last;
+        await delay(750);
+      }
+      return isReliableJob(last) ? last : null;
+    } finally {
+      chrome.tabs.remove(tabId).catch(() => undefined);
+    }
   }
 
   async scanForm(): Promise<FormField[]> {
@@ -92,6 +114,38 @@ export class ChromePageGateway implements PageGateway {
     if (tab?.id === undefined) throw new PageAccessError('No active tab found.', false);
     return tab.id;
   }
+}
+
+/** Pick the frame with the richest description (job may be in an embedded iframe). */
+function pickBestScan(scans: (JobPageScan | undefined | null)[]): JobPageScan | null {
+  const valid = scans.filter((s): s is JobPageScan => !!s?.job);
+  if (!valid.length) return null;
+  const rank = (s: JobPageScan) => (isReliableJob(s.job) ? 1e9 : 0) + s.job.description.length;
+  const best = [...valid].sort((a, b) => rank(b) - rank(a))[0]!;
+  // Merge hints from every frame (the top frame usually has the referrer).
+  return {
+    job: best.job,
+    referrer: valid.map((s) => s.referrer).find(Boolean) ?? '',
+    relatedLinks: [...new Set(valid.flatMap((s) => s.relatedLinks))],
+  };
+}
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function waitForTabLoad(tabId: number, timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const listener = (id: number, info: { status?: string }) => {
+      if (id === tabId && info.status === 'complete') done();
+    };
+    const timer = setTimeout(done, timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId).then((t) => t.status === 'complete' && done()).catch(done);
+  });
 }
 
 function toBase64(bytes: Uint8Array): string {

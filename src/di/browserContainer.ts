@@ -8,6 +8,7 @@ import {
   StoreAccomplishmentRepository,
   StoreApplicationRepository,
   StoreChatRepository,
+  StoreJobMemoryRepository,
   StoreProfileRepository,
   StoreSettingsRepository,
 } from '@/infrastructure/storage/ChromeStorage';
@@ -29,6 +30,7 @@ export function createBrowserContainer(): Container {
     .register(T.accomplishmentRepo, (c) => new StoreAccomplishmentRepository(c.resolve(T.store)))
     .register(T.chatRepo, (c) => new StoreChatRepository(c.resolve(T.store)))
     .register(T.applicationRepo, (c) => new StoreApplicationRepository(c.resolve(T.store)))
+    .register(T.jobMemoryRepo, (c) => new StoreJobMemoryRepository(c.resolve(T.store)))
     .register(T.llm, (c) => new SettingsBackedLLMProvider(c.resolve(T.settingsRepo)))
     .register(T.extractor, () => new CompositeTextExtractor([new PdfTextExtractor(), new DocxTextExtractor(), new PlainTextExtractor()]))
     .register(T.renderer, () => new PdfLibResumeRenderer())

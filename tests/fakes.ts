@@ -2,7 +2,7 @@ import { Container } from '@/di/container';
 import { registerApplication } from '@/di/registerApplication';
 import { TOKENS as T } from '@/di/tokens';
 import type { FieldAnswer, FillReport, FormField } from '@/domain/form';
-import type { JobPosting } from '@/domain/job';
+import type { JobPageScan, JobPosting } from '@/domain/job';
 import { emptyProfile, type Profile } from '@/domain/profile';
 import type { LLMJsonRequest, LLMProvider, LLMRequest } from '@/ports/LLMProvider';
 import type { FillRequest, PageGateway } from '@/ports/PageGateway';
@@ -12,6 +12,7 @@ import {
   StoreAccomplishmentRepository,
   StoreApplicationRepository,
   StoreChatRepository,
+  StoreJobMemoryRepository,
   StoreProfileRepository,
   StoreSettingsRepository,
 } from '@/infrastructure/storage/ChromeStorage';
@@ -39,15 +40,24 @@ export class FakeLLM implements LLMProvider {
 
 export class FakePage implements PageGateway {
   fills: FillRequest[] = [];
+  /** Pages that readJobPostingAt can "open", by URL. */
+  otherPages = new Map<string, JobPosting>();
+  opened: string[] = [];
+  referrer = '';
+  relatedLinks: string[] = [];
   constructor(
     public fields: FormField[] = [],
-    public job: JobPosting = { title: 'Engineer', company: 'Acme', location: '', description: 'x'.repeat(300), url: 'https://acme.test/job' },
+    public job: JobPosting = { title: 'Engineer', company: 'Acme', location: '', description: 'x'.repeat(300), url: 'https://acme.test/job', source: 'board' },
   ) {}
   async pageUrl() {
     return this.job.url;
   }
-  async readJobPosting() {
-    return this.job;
+  async readJobPosting(): Promise<JobPageScan> {
+    return { job: this.job, referrer: this.referrer, relatedLinks: this.relatedLinks };
+  }
+  async readJobPostingAt(url: string) {
+    this.opened.push(url);
+    return this.otherPages.get(url) ?? null;
   }
   async scanForm() {
     return this.fields;
@@ -99,6 +109,7 @@ export function createTestContainer(opts: { llm?: FakeLLM; page?: FakePage } = {
     .register(T.accomplishmentRepo, (c) => new StoreAccomplishmentRepository(c.resolve(T.store)))
     .register(T.chatRepo, (c) => new StoreChatRepository(c.resolve(T.store)))
     .register(T.applicationRepo, (c) => new StoreApplicationRepository(c.resolve(T.store)))
+    .register(T.jobMemoryRepo, (c) => new StoreJobMemoryRepository(c.resolve(T.store)))
     .register(T.llm, () => opts.llm ?? new FakeLLM())
     .register(T.extractor, () => new PlainTextExtractor())
     .register(T.renderer, () => new FakeRenderer())

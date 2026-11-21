@@ -1,11 +1,11 @@
-import type { JobPosting } from '@/domain/job';
+import type { JobPageScan, JobPosting } from '@/domain/job';
 
 /**
  * Injected into the page with chrome.scripting.executeScript({ func }).
  * MUST be fully self-contained: no imports or outer-scope references at runtime
  * (the type import above is erased at compile time).
  */
-export function scrapeJobInPage(): JobPosting {
+export function scrapeJobInPage(): JobPageScan {
   const clean = (s: string | null | undefined) =>
     (s ?? '')
       .replace(/ /g, ' ')
@@ -59,6 +59,7 @@ export function scrapeJobInPage(): JobPosting {
         [addr?.addressLocality, addr?.addressRegion, addr?.addressCountry].filter((x) => typeof x === 'string').join(', '),
       );
       result.description = htmlToText(String(job.description ?? ''));
+      if (result.description) result.source = 'structured';
       break;
     } catch {
       /* ignore malformed JSON-LD */
@@ -67,6 +68,7 @@ export function scrapeJobInPage(): JobPosting {
 
   // 2) Known job boards / ATS layouts.
   const boards: { title: string[]; company: string[]; description: string[] }[] = [
+    { title: ['[data-ui="job-title"]', 'h1[data-ui]'], company: ['[data-ui="company-name"]', 'header img[alt]'], description: ['[data-ui="job-description"]', '[data-ui="job-requirements"]', 'section[data-ui]'] }, // Workable
     { title: ['.posting-headline h2'], company: ['.main-header-logo img[alt]'], description: ['.posting-page .content', '.section-wrapper.page-full-width'] }, // Lever
     { title: ['.job__title h1', '.app-title', 'h1.section-header'], company: ['.company-name'], description: ['.job__description', '#content .job-post', '#content'] }, // Greenhouse
     { title: ['[data-automation-id="jobPostingHeader"]'], company: [], description: ['[data-automation-id="jobPostingDescription"]'] }, // Workday
@@ -78,7 +80,10 @@ export function scrapeJobInPage(): JobPosting {
   for (const b of boards) {
     const description = b.description.map(textOf).find((t) => t.length > 200) ?? '';
     if (!description) continue;
-    if (description.length > result.description.length) result.description = description;
+    if (description.length > result.description.length) {
+      result.description = description;
+      result.source = 'board';
+    }
     result.title ||= b.title.map(textOf).find(Boolean) ?? '';
     if (!result.company) {
       for (const sel of b.company) {
@@ -99,8 +104,33 @@ export function scrapeJobInPage(): JobPosting {
   if (result.description.length < 200) {
     const main = document.querySelector<HTMLElement>('main, [role="main"], article') ?? document.body;
     const text = clean(main?.innerText);
-    if (text.length > result.description.length) result.description = text;
+    if (text.length > result.description.length) {
+      result.description = text;
+      result.source = 'fallback';
+    }
   }
   result.description = result.description.slice(0, 30_000);
-  return result;
+
+  // 4) Hints for finding the posting page when this is an application form.
+  const here = location.origin + location.pathname.replace(/\/$/, '');
+  const LINK_TEXT = /\b(view|see|back to|read|full)\b.*\b(job|posting|description|details|role|position)\b|^job (description|details)$|^(description|overview|details)$/i;
+  const related = new Set<string>();
+  for (const a of Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]'))) {
+    let href: URL;
+    try {
+      href = new URL(a.href, location.href);
+    } catch {
+      continue;
+    }
+    if (!/^https?:$/.test(href.protocol)) continue;
+    const target = href.origin + href.pathname.replace(/\/$/, '');
+    if (target === here) continue;
+    const text = clean(a.innerText || a.getAttribute('aria-label') || '');
+    // "View job" style links, or a same-site parent path of this page (/jobs/123 from /jobs/123/apply).
+    const isParent = href.origin === location.origin && here.startsWith(target + '/') && target.split('/').length > 3;
+    if ((text && text.length < 60 && LINK_TEXT.test(text)) || isParent) related.add(href.origin + href.pathname + href.search);
+    if (related.size >= 5) break;
+  }
+
+  return { job: result, referrer: document.referrer, relatedLinks: [...related] };
 }

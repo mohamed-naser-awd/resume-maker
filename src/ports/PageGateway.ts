@@ -1,5 +1,5 @@
 import type { FieldAnswer, FillReport, FormField } from '@/domain/form';
-import type { JobPosting } from '@/domain/job';
+import type { JobPageScan, JobPosting } from '@/domain/job';
 import type { RenderedDocument } from './ResumeRenderer';
 
 export interface FieldRef {
@@ -19,7 +19,13 @@ export interface FillRequest {
 export interface PageGateway {
   /** URL of the active tab ("" if unknown). */
   pageUrl(): Promise<string>;
-  readJobPosting(): Promise<JobPosting>;
+  /** Reads the job on the active tab, plus hints (referrer, "view job" links) for finding the posting page. */
+  readJobPosting(): Promise<JobPageScan>;
+  /**
+   * Reads the job posting at another URL without disturbing the user (hidden background tab).
+   * Returns null if no reliable description was found there.
+   */
+  readJobPostingAt(url: string): Promise<JobPosting | null>;
   scanForm(): Promise<FormField[]>;
   fillForm(request: FillRequest): Promise<FillReport>;
 }

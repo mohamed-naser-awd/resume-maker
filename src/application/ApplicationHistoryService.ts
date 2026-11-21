@@ -5,7 +5,7 @@ import {
   type ApplicationStatus,
 } from '@/domain/application';
 import { LLMError } from '@/domain/errors';
-import type { JobPosting } from '@/domain/job';
+import { mergeJob, type JobPosting } from '@/domain/job';
 import { resumeToPlainText, type TailoredResume } from '@/domain/resume';
 import type { LLMProvider } from '@/ports/LLMProvider';
 import type { ApplicationRepository, Unsubscribe } from '@/ports/repositories';
@@ -160,13 +160,8 @@ export class ApplicationHistoryService {
       followUps: [],
       notes: '',
     };
-    const updated = { ...fn({ ...base, job: { ...base.job, ...nonEmpty(storedJob) } }), updatedAt: now };
+    const updated = { ...fn({ ...base, job: existing ? mergeJob(base.job, storedJob) : storedJob }), updatedAt: now };
     await this.deps.applications.saveAll(existing ? all.map((r) => (r.id === existing.id ? updated : r)) : [updated, ...all]);
     return updated;
   }
-}
-
-/** Only overwrite stored job fields with non-empty new values. */
-function nonEmpty(job: JobPosting): Partial<JobPosting> {
-  return Object.fromEntries(Object.entries(job).filter(([, v]) => typeof v === 'string' && v.trim())) as Partial<JobPosting>;
 }

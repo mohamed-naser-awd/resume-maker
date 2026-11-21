@@ -3,10 +3,12 @@ import type { ChatMessage } from '@/domain/chat';
 import { emptyProfile, type Profile } from '@/domain/profile';
 import { defaultSettings, type Settings } from '@/domain/settings';
 import type { ApplicationRecord } from '@/domain/application';
+import type { JobPosting } from '@/domain/job';
 import type {
   AccomplishmentRepository,
   ApplicationRepository,
   ChatRepository,
+  JobMemoryRepository,
   ProfileRepository,
   SettingsRepository,
   Unsubscribe,
@@ -67,7 +69,35 @@ const KEYS = {
   chat: 'chatHistory',
   applications: 'applications',
   settings: 'settings',
+  jobMemory: 'jobMemory',
 } as const;
+
+const MAX_REMEMBERED_JOBS = 200;
+
+interface RememberedJob {
+  job: JobPosting;
+  seenAt: number;
+}
+
+/** Postings seen while browsing; oldest entries are dropped beyond MAX_REMEMBERED_JOBS. */
+export class StoreJobMemoryRepository implements JobMemoryRepository {
+  constructor(private readonly store: KeyValueStore) {}
+  async get(identity: string): Promise<JobPosting | null> {
+    return (await this.all())[identity]?.job ?? null;
+  }
+  async put(identity: string, job: JobPosting): Promise<void> {
+    const all = await this.all();
+    all[identity] = { job: { ...job, description: job.description.slice(0, 20_000) }, seenAt: Date.now() };
+    const keys = Object.keys(all);
+    if (keys.length > MAX_REMEMBERED_JOBS) {
+      keys.sort((a, b) => all[a]!.seenAt - all[b]!.seenAt).slice(0, keys.length - MAX_REMEMBERED_JOBS).forEach((k) => delete all[k]);
+    }
+    await this.store.set(KEYS.jobMemory, all);
+  }
+  private async all(): Promise<Record<string, RememberedJob>> {
+    return { ...((await this.store.get<Record<string, RememberedJob>>(KEYS.jobMemory)) ?? {}) };
+  }
+}
 
 export class StoreProfileRepository implements ProfileRepository {
   constructor(private readonly store: KeyValueStore) {}

@@ -16,6 +16,18 @@ Every resume you generate is saved to **History** (a side panel tab, plus a full
 - **Draft follow-up**: AI writes a short email grounded in that resume and job. Copy it, send it yourself, then press *I sent it* to log it
 - keep notes (recruiter, contact email, interview dates)
 
+### Description on one page, form on another
+
+Many ATSs (Workable, Lever, Greenhouse, Workday…) show the job description on one URL and the
+application form on another (`…/j/5294DA8CF4/` vs `…/j/5294DA8CF4/apply/`). Resume Maker handles this:
+
+1. **Remembers postings while you browse** (side panel open, no AI): each posting is stored locally
+   under a job ID taken from the URL, so the description page and its form pages match.
+2. **Finds the posting page** when you open a form directly: tries the URL without `/apply`, "View job"
+   links on the page, and the page you came from, reading it in a hidden background tab.
+3. **Never uses form text as a description** and never overwrites a saved description with it. If
+   nothing is found, it asks you to open the posting or paste the description.
+
 ### Fill modes (Settings → Autofill)
 
 - **Review first** (default): *Review & fill this page* shows every proposed value. Edit, untick, or type answers for empty fields, then press *Fill*. Nothing on the page changes before that.

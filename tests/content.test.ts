@@ -97,9 +97,26 @@ describe('scrapeJobInPage', () => {
       description,
     })}</script>`;
     document.body.innerHTML = '<h1>Something else</h1>';
-    const job = scrapeJobInPage();
-    expect(job).toMatchObject({ title: 'Staff Engineer', company: 'Acme', location: 'Austin, TX' });
+    const { job } = scrapeJobInPage();
+    expect(job).toMatchObject({ title: 'Staff Engineer', company: 'Acme', location: 'Austin, TX', source: 'structured' });
     expect(job.description).toContain('- 5+ years TypeScript');
     document.head.innerHTML = '';
+  });
+
+  it('marks form text as fallback and finds the link back to the posting', () => {
+    window.history.pushState({}, '', '/lucidya/j/5294DA8CF4/apply/');
+    document.body.innerHTML = `
+      <main>
+        <a href="/lucidya/j/5294DA8CF4/">View job</a>
+        <a href="/lucidya/">All jobs</a>
+        <a href="https://example.com/privacy">Privacy</a>
+        <h1>Apply for Senior Engineer</h1>
+        <form>${'<label>First name<input name="first"></label><p>Please fill in your details carefully.</p>'.repeat(12)}</form>
+      </main>`;
+    const scan = scrapeJobInPage();
+    expect(scan.job.source).toBe('fallback');
+    expect(scan.relatedLinks).toContain(`${location.origin}/lucidya/j/5294DA8CF4/`);
+    expect(scan.relatedLinks.some((l) => l.includes('privacy'))).toBe(false);
+    window.history.pushState({}, '', '/');
   });
 });

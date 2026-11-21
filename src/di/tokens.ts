@@ -13,6 +13,7 @@ import type {
   AccomplishmentRepository,
   ApplicationRepository,
   ChatRepository,
+  JobMemoryRepository,
   ProfileRepository,
   SettingsRepository,
 } from '@/ports/repositories';
@@ -29,6 +30,7 @@ export const TOKENS = {
   accomplishmentRepo: token<AccomplishmentRepository>('AccomplishmentRepository'),
   chatRepo: token<ChatRepository>('ChatRepository'),
   applicationRepo: token<ApplicationRepository>('ApplicationRepository'),
+  jobMemoryRepo: token<JobMemoryRepository>('JobMemoryRepository'),
   llm: token<LLMProvider>('LLMProvider'),
   extractor: token<DocumentTextExtractor>('DocumentTextExtractor'),
   renderer: token<ResumeRenderer>('ResumeRenderer'),

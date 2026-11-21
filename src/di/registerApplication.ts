@@ -55,5 +55,7 @@ export function registerApplication(c: Container): Container {
         clock: c.resolve(T.clock),
       }),
     )
-    .register(T.jobs, (c) => new JobService(c.resolve(T.page)));
+    .register(T.jobs, (c) =>
+      new JobService({ page: c.resolve(T.page), memory: c.resolve(T.jobMemoryRepo), history: c.resolve(T.history) }),
+    );
 }

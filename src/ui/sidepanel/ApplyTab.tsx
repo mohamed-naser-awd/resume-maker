@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TailorResult } from '@/application/TailorResumeUseCase';
+import type { JobOrigin } from '@/application/JobService';
 import { TOKENS } from '@/di/tokens';
 import type { AutofillResult, FillPlan, FormDetection } from '@/domain/form';
 import type { FillMode } from '@/domain/settings';
@@ -13,7 +14,14 @@ import { downloadBytes } from '../shared/chromeUi';
 import { useService } from '../shared/services';
 import { useAction } from '../shared/useAction';
 
-const emptyJob = (): JobPosting => ({ title: '', company: '', location: '', description: '', url: '' });
+const emptyJob = (): JobPosting => ({ title: '', company: '', location: '', description: '', url: '', source: 'manual' });
+
+const ORIGIN_NOTE: Record<JobOrigin, string> = {
+  page: '',
+  memory: 'Description loaded from the job posting you viewed earlier.',
+  history: 'Description loaded from your history for this job.',
+  'posting-page': 'Description read from the job posting page (this page only has the form).',
+};
 
 export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const jobs = useService(TOKENS.jobs);
@@ -24,7 +32,14 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const pageEvents = useService(TOKENS.pageEvents);
   const history = useService(TOKENS.history);
 
-  const [job, setJob] = useState<JobPosting | null>(null);
+  const [job, setJobState] = useState<JobPosting | null>(null);
+  const [origin, setOrigin] = useState<JobOrigin | null>(null);
+  /** Manual edits make the description "manual" (trusted, never replaced by page text). */
+  const setJob = (j: JobPosting | null) => {
+    setJobState(j);
+    setOrigin(null);
+  };
+  const editJob = (patch: Partial<JobPosting>) => job && setJob({ ...job, ...patch, source: patch.description !== undefined ? 'manual' : job.source });
   const [result, setResult] = useState<TailorResult | null>(null);
   const [fill, setFill] = useState<AutofillResult | null>(null);
   const [hasProfile, setHasProfile] = useState(true);
@@ -48,9 +63,10 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
     setResult(null);
     setFill(null);
     const found = await jobs.detectFromPage();
-    setJob(found);
+    setJobState(found.job);
+    setOrigin(found.origin);
     // Same link as before? Show the resume already generated for it (no AI call).
-    setResult(await tailor.loadSaved(found));
+    setResult(await tailor.loadSaved(found.job));
   });
   /** force=false reuses the resume saved for this link; force=true makes a new AI version. */
   const generate = useAction(async (force: boolean) => {
@@ -74,8 +90,11 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const jobContext = async () => {
     if (job) return job;
     const found = await jobs.detectFromPage().catch(() => null);
-    if (found) setJob(found);
-    return found;
+    if (found) {
+      setJobState(found.job);
+      setOrigin(found.origin);
+    }
+    return found?.job ?? null;
   };
 
   /** Current resume, or the one saved earlier for this link (never generates a new one). */
@@ -101,14 +120,25 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   });
 
   // Watch the active tab: detect application forms (no AI) and auto-fill in automatic mode.
-  const latest = useRef({ fillMode, hasProfile, busy: false, run: runFill.run });
-  latest.current = { fillMode, hasProfile, busy: runFill.busy || applyPlan.busy, run: runFill.run };
+  const latest = useRef({ fillMode, hasProfile, hasJob: false, busy: false, run: runFill.run });
+  latest.current = { fillMode, hasProfile, hasJob: !!job, busy: runFill.busy || applyPlan.busy, run: runFill.run };
   useEffect(() => {
     let timers: ReturnType<typeof setTimeout>[] = [];
     const autoFilled = new Set<string>();
     const unsubscribe = pageEvents.onActivePageReady(() => {
       timers.forEach(clearTimeout);
       setDetected(null);
+      // Remember job postings while browsing (no AI, no extra tabs) so a later form page
+      // on another URL can use the description. Load the job if nothing is shown yet.
+      setTimeout(async () => {
+        const known = await jobs.rememberFromPage();
+        if (known && !latest.current.hasJob) {
+          setJobState(known.job);
+          setOrigin(known.origin);
+          const saved = await tailor.loadSaved(known.job);
+          if (saved) setResult(saved);
+        }
+      }, 1500);
       // Forms on single-page apps render late, so check a few times.
       timers = [800, 2500, 5000].map((delay) =>
         setTimeout(async () => {
@@ -128,7 +158,7 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
       unsubscribe();
       timers.forEach(clearTimeout);
     };
-  }, [pageEvents, autofill]);
+  }, [pageEvents, autofill, jobs, tailor]);
 
   const pdfUrl = useMemo(
     () => (result ? URL.createObjectURL(new Blob([result.document.bytes as BlobPart], { type: result.document.mimeType })) : null),
@@ -165,13 +195,14 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
         <ErrorBanner error={detect.error} onDismiss={detect.clearError} onPermissionGranted={() => detect.run()} />
         {job && (
           <div className="stack">
+            {origin && ORIGIN_NOTE[origin] && <div className="banner info">{ORIGIN_NOTE[origin]}</div>}
             <div className="grid2">
-              <label className="field">Job title<input type="text" value={job.title} onChange={(e) => setJob({ ...job, title: e.target.value })} /></label>
-              <label className="field">Company<input type="text" value={job.company} onChange={(e) => setJob({ ...job, company: e.target.value })} /></label>
+              <label className="field">Job title<input type="text" value={job.title} onChange={(e) => editJob({ title: e.target.value })} /></label>
+              <label className="field">Company<input type="text" value={job.company} onChange={(e) => editJob({ company: e.target.value })} /></label>
             </div>
             <label className="field">
               Description ({job.description.length.toLocaleString()} chars)
-              <textarea rows={6} value={job.description} onChange={(e) => setJob({ ...job, description: e.target.value })} />
+              <textarea rows={6} value={job.description} onChange={(e) => editJob({ description: e.target.value })} />
             </label>
           </div>
         )}
