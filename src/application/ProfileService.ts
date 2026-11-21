@@ -24,6 +24,11 @@ export class ProfileService {
     return this.deps.profiles.get();
   }
 
+  /** Notifies whenever the stored profile changes (upload, edit, other extension page). */
+  subscribe(listener: (profile: Profile) => void): () => void {
+    return this.deps.profiles.onChange(listener);
+  }
+
   async save(profile: Profile): Promise<Profile> {
     const updated = { ...profile, updatedAt: this.deps.clock().toISOString() };
     await this.deps.profiles.save(updated);

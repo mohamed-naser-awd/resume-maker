@@ -69,13 +69,13 @@ const KEYS = {
 export class StoreProfileRepository implements ProfileRepository {
   constructor(private readonly store: KeyValueStore) {}
   async get(): Promise<Profile> {
-    // Merge with defaults so profiles saved by older versions gain new fields.
-    const saved = await this.store.get<Partial<Profile>>(KEYS.profile);
-    const base = emptyProfile();
-    return saved ? { ...base, ...saved, contact: { ...base.contact, ...saved.contact } } : base;
+    return mergeProfile(await this.store.get<Partial<Profile>>(KEYS.profile));
   }
   save(profile: Profile): Promise<void> {
     return this.store.set(KEYS.profile, profile);
+  }
+  onChange(listener: (profile: Profile) => void): Unsubscribe {
+    return this.store.onChange(KEYS.profile, (v) => listener(mergeProfile(v as Partial<Profile> | undefined)));
   }
 }
 
@@ -113,6 +113,12 @@ export class StoreSettingsRepository implements SettingsRepository {
   onChange(listener: (settings: Settings) => void): Unsubscribe {
     return this.store.onChange(KEYS.settings, (v) => listener(mergeSettings(v as Partial<Settings> | undefined)));
   }
+}
+
+/** Merge with defaults so profiles saved by older versions gain new fields. */
+function mergeProfile(saved: Partial<Profile> | undefined): Profile {
+  const base = emptyProfile();
+  return saved ? { ...base, ...saved, contact: { ...base.contact, ...saved.contact } } : base;
 }
 
 function mergeSettings(saved: Partial<Settings> | undefined): Settings {

@@ -3,6 +3,7 @@ import type { TailorResult } from '@/application/TailorResumeUseCase';
 import { TOKENS } from '@/di/tokens';
 import type { AutofillResult, FillPlan, FormDetection } from '@/domain/form';
 import type { FillMode } from '@/domain/settings';
+import { isProfileEmpty } from '@/domain/profile';
 import { FillReview } from './FillReview';
 import type { JobPosting } from '@/domain/job';
 import { resumeToPlainText } from '@/domain/resume';
@@ -31,7 +32,8 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const [fillMode, setFillMode] = useState<FillMode>('confirm');
 
   useEffect(() => {
-    void profiles.get().then((p) => setHasProfile(!!p.sourceResumeText || p.experience.length > 0));
+    void profiles.get().then((p) => setHasProfile(!isProfileEmpty(p)));
+    return profiles.subscribe((p) => setHasProfile(!isProfileEmpty(p)));
   }, [profiles]);
 
   useEffect(() => {

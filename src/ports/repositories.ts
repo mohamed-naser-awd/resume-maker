@@ -8,6 +8,7 @@ export type Unsubscribe = () => void;
 export interface ProfileRepository {
   get(): Promise<Profile>;
   save(profile: Profile): Promise<void>;
+  onChange(listener: (profile: Profile) => void): Unsubscribe;
 }
 
 export interface AccomplishmentRepository {

@@ -133,3 +133,16 @@ describe('detectApplicationForm', () => {
     expect(detectApplicationForm([f('Search jobs'), f('Location')], 'https://www.linkedin.com/jobs/search').likely).toBe(false);
   });
 });
+
+describe('StoreProfileRepository.onChange', () => {
+  it('notifies listeners when the profile is saved (keeps the Apply tab in sync)', async () => {
+    const { StoreProfileRepository } = await import('@/infrastructure/storage/ChromeStorage');
+    const repo = new StoreProfileRepository(new InMemoryStore());
+    const seen: string[] = [];
+    const off = repo.onChange((p) => seen.push(p.contact.fullName));
+    await repo.save(sampleProfile());
+    off();
+    await repo.save({ ...sampleProfile(), contact: { ...sampleProfile().contact, fullName: 'Other' } });
+    expect(seen).toEqual(['Jane Q Doe']);
+  });
+});
