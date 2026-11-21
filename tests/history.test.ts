@@ -101,3 +101,51 @@ describe('application rules', () => {
     expect(isSameJob(job(), job({ url: 'https://boards.greenhouse.io/acme/jobs/999', title: 'Designer' }))).toBe(false);
   });
 });
+
+describe('TailorResumeUseCase idempotency', () => {
+  const tailored = (summary: string) => ({
+    jobTitle: '', company: '', headline: 'Eng', summary,
+    skills: [], experience: [], education: [], certifications: [], targetKeywords: [],
+  });
+
+  it('reuses the resume for the same link instead of calling the AI again', async () => {
+    const llm = new FakeLLM([tailored('first'), tailored('second')]);
+    const c = createTestContainer({ llm });
+    await c.resolve(T.profileRepo).save(sampleProfile());
+    const tailor = c.resolve(T.tailor);
+
+    const a = await tailor.execute(job());
+    const b = await tailor.execute(job({ url: 'https://boards.greenhouse.io/acme/jobs/123/apply?utm=x#top' }));
+    expect(a.reused).toBe(false);
+    expect(b.reused).toBe(true);
+    expect(b.resume.summary).toBe('first');
+    expect(llm.requests).toHaveLength(1);
+  });
+
+  it('shares one in-flight request when generate is triggered twice at once', async () => {
+    const llm = new FakeLLM([tailored('only')]);
+    const c = createTestContainer({ llm });
+    await c.resolve(T.profileRepo).save(sampleProfile());
+    const tailor = c.resolve(T.tailor);
+    const [a, b] = await Promise.all([tailor.execute(job()), tailor.execute(job())]);
+    expect(a).toBe(b);
+    expect(llm.requests).toHaveLength(1);
+  });
+
+  it('force regenerates and replaces the saved version; other links are separate', async () => {
+    const llm = new FakeLLM([tailored('v1'), tailored('v2'), tailored('other')]);
+    const c = createTestContainer({ llm });
+    await c.resolve(T.profileRepo).save(sampleProfile());
+    const tailor = c.resolve(T.tailor);
+    await tailor.execute(job());
+    const forced = await tailor.execute(job(), { force: true });
+    expect(forced.reused).toBe(false);
+    expect((await tailor.loadSaved(job()))!.resume.summary).toBe('v2');
+
+    // Same company + title but a different posting link -> its own resume and record.
+    const other = await tailor.execute(job({ url: 'https://boards.greenhouse.io/acme/jobs/456' }));
+    expect(other.reused).toBe(false);
+    expect(await c.resolve(T.history).list()).toHaveLength(2);
+    expect(llm.requests).toHaveLength(3);
+  });
+});

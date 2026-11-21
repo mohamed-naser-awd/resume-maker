@@ -1,5 +1,5 @@
 import {
-  isSameJob,
+  isSameLink,
   sortByRecent,
   type ApplicationRecord,
   type ApplicationStatus,
@@ -53,8 +53,13 @@ export class ApplicationHistoryService {
     }));
   }
 
+  /** Record for exactly this job link (used to avoid generating the same resume twice). */
+  async findByLink(job: JobPosting): Promise<ApplicationRecord | null> {
+    return (await this.deps.applications.list()).find((r) => isSameLink(r.job, job)) ?? null;
+  }
+
   async findForJob(job: JobPosting): Promise<ApplicationRecord | null> {
-    return (await this.deps.applications.list()).find((r) => isSameJob(r.job, job)) ?? null;
+    return (await this.deps.applications.list()).find((r) => isSameLink(r.job, job)) ?? null;
   }
 
   async setStatus(id: string, status: ApplicationStatus): Promise<void> {
@@ -143,7 +148,7 @@ export class ApplicationHistoryService {
     const now = this.now();
     const storedJob = { ...job, description: job.description.slice(0, MAX_STORED_DESCRIPTION) };
     const all = await this.deps.applications.list();
-    const existing = all.find((r) => isSameJob(r.job, job));
+    const existing = all.find((r) => isSameLink(r.job, job));
     const base: ApplicationRecord = existing ?? {
       id: this.deps.idGen(),
       job: storedJob,

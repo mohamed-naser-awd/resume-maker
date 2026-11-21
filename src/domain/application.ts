@@ -57,7 +57,8 @@ export function needsFollowUp(r: ApplicationRecord, now: Date, afterDays = FOLLO
   return !!last && daysSince(last, now) >= afterDays;
 }
 
-const normalizeUrl = (url: string) => {
+/** Canonical form of a job link: host + path, without query, hash, trailing slash or /apply. */
+export const normalizeUrl = (url: string) => {
   try {
     const u = new URL(url);
     return `${u.host}${u.pathname}`.replace(/\/(apply|application)\/?$/i, '').replace(/\/$/, '').toLowerCase();
@@ -71,6 +72,20 @@ const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 export function isSameJob(a: JobPosting, b: JobPosting): boolean {
   if (a.url && b.url && normalizeUrl(a.url) === normalizeUrl(b.url)) return true;
   return !!a.company && !!a.title && norm(a.company) === norm(b.company) && norm(a.title) === norm(b.title);
+}
+
+/**
+ * Strict match used for idempotent generation: the same job link.
+ * Only when a posting has no URL (pasted manually) does it fall back to company + title.
+ */
+export function isSameLink(a: JobPosting, b: JobPosting): boolean {
+  if (a.url && b.url) return normalizeUrl(a.url) === normalizeUrl(b.url);
+  return isSameJob(a, b);
+}
+
+/** Key for de-duplicating concurrent requests for one job. */
+export function jobKey(job: JobPosting): string {
+  return job.url ? normalizeUrl(job.url) : `${norm(job.company)}|${norm(job.title)}`;
 }
 
 export function sortByRecent(records: ApplicationRecord[]): ApplicationRecord[] {

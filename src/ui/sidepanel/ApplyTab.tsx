@@ -47,12 +47,16 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const detect = useAction(async () => {
     setResult(null);
     setFill(null);
-    setJob(await jobs.detectFromPage());
+    const found = await jobs.detectFromPage();
+    setJob(found);
+    // Same link as before? Show the resume already generated for it (no AI call).
+    setResult(await tailor.loadSaved(found));
   });
-  const generate = useAction(async () => {
+  /** force=false reuses the resume saved for this link; force=true makes a new AI version. */
+  const generate = useAction(async (force: boolean) => {
     if (!job) return;
     setFill(null);
-    const out = await tailor.execute(job);
+    const out = await tailor.execute(job, { force });
     setResult(out);
     setApplication(out.application);
   });
@@ -74,11 +78,20 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
     return found;
   };
 
+  /** Current resume, or the one saved earlier for this link (never generates a new one). */
+  const resumeFor = async (j: JobPosting | null) => {
+    if (result) return result;
+    const saved = j ? await tailor.loadSaved(j) : null;
+    if (saved) setResult(saved);
+    return saved;
+  };
+
   // Fill button: "review first" prepares a plan; "automatic" fills straight away.
   const runFill = useAction(async (mode: FillMode) => {
     setFill(null);
     setPlan(null);
-    const input = { job: await jobContext(), resumeDocument: result?.document ?? null };
+    const j = await jobContext();
+    const input = { job: j, resumeDocument: (await resumeFor(j))?.document ?? null };
     if (mode === 'auto') setFill(await autofill.execute(input));
     else setPlan(await autofill.prepare(input));
   });
@@ -166,9 +179,33 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
 
       <section className="card">
         <h2>2. Tailored resume</h2>
-        <button className="btn primary" disabled={anyBusy || !job || job.description.trim().length < 50} onClick={() => generate.run()}>
-          {generate.busy ? <><span className="spinner" /> Tailoring resume… (up to a minute)</> : result ? 'Regenerate resume' : 'Generate ATS resume'}
-        </button>
+        {result?.reused && (
+          <div className="banner info">
+            <span>
+              Using the resume already generated for this link on {new Date(result.resume.generatedAt).toLocaleDateString()} (no AI
+              call). Regenerate only if you want a new version.
+            </span>
+          </div>
+        )}
+        <div className="row">
+          {!result ? (
+            <button className="btn primary" disabled={anyBusy || !job || job.description.trim().length < 50} onClick={() => generate.run(false)}>
+              {generate.busy ? <><span className="spinner" /> Tailoring resume… (up to a minute)</> : 'Generate ATS resume'}
+            </button>
+          ) : (
+            <button
+              className="btn"
+              disabled={anyBusy || !job || job.description.trim().length < 50}
+              onClick={() => {
+                if (!result.reused || confirm('Generate a new version for this job? It replaces the saved resume for this link.')) {
+                  void generate.run(true);
+                }
+              }}
+            >
+              {generate.busy ? <><span className="spinner" /> Tailoring resume… (up to a minute)</> : '↻ Regenerate resume'}
+            </button>
+          )}
+        </div>
         <ErrorBanner error={generate.error} onDismiss={generate.clearError} />
         {result && pdfUrl && (
           <>
