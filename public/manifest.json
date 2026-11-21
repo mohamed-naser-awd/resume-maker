@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Resume Maker",
+  "short_name": "Resume Maker",
+  "version": "0.1.0",
+  "description": "Autofill job applications and generate ATS-friendly resumes tailored to each job.",
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_title": "Resume Maker",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "options_page": "options.html",
+  "permissions": ["storage", "sidePanel", "activeTab", "scripting"],
+  "host_permissions": ["https://api.anthropic.com/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*", "https://api.openai.com/*"]
+}
