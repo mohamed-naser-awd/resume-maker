@@ -11,6 +11,18 @@ import { scrapeJobInPage } from '@/extension/content/scrapeJob';
  * active tab (all frames – many ATS forms live in iframes).
  */
 export class ChromePageGateway implements PageGateway {
+  async pageUrl(): Promise<string> {
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    // tab.url is only visible with host permission / activeTab; fall back to asking the page.
+    if (tab?.url) return tab.url;
+    try {
+      const [res] = await this.run(() => location.href, []);
+      return res?.result ?? '';
+    } catch {
+      return '';
+    }
+  }
+
   async readJobPosting(): Promise<JobPosting> {
     const results = await this.run(scrapeJobInPage, []);
     // Pick the frame with the richest description (job may be in an embedded iframe).

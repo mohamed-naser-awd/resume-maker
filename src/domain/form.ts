@@ -56,6 +56,51 @@ export interface AutofillResult {
   report: FillReport;
 }
 
+/** One proposed value for a field. `source: null` = no answer found (user may type one). */
+export interface FillPlanItem {
+  field: FormField;
+  value: string;
+  source: AnswerSource | null;
+}
+
+/** Everything we intend to fill, computed before touching the page (used for "review first"). */
+export interface FillPlan {
+  items: FillPlanItem[];
+  /** Fields deliberately left alone (sensitive, already filled, unsupported). */
+  skipped: SkippedField[];
+}
+
+export interface FormDetection {
+  likely: boolean;
+  score: number;
+  fieldCount: number;
+  url: string;
+}
+
+/** Hosts of applicant-tracking systems and job boards with apply flows. */
+const ATS_HOSTS =
+  /(greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|workday\.com|ashbyhq\.com|smartrecruiters\.com|icims\.com|jobvite\.com|workable\.com|bamboohr\.com|recruitee\.com|teamtailor\.com|breezy\.hr|applytojob\.com|jazzhr\.com|successfactors\.(com|eu)|taleo\.net|personio\.(de|com)|pinpointhq\.com|rippling\.com|linkedin\.com\/jobs|indeed\.com)/i;
+
+/**
+ * Heuristic, no AI: does this page look like a job application form (vs. a login,
+ * newsletter or search form)? Based on the scanned fields and the URL.
+ */
+export function detectApplicationForm(fields: FormField[], url: string): FormDetection {
+  const text = (f: FormField) => `${f.label} ${f.name} ${f.placeholder} ${f.autocomplete}`.toLowerCase();
+  const has = (re: RegExp) => fields.some((f) => re.test(text(f)));
+  let score = 0;
+  if (fields.some((f) => f.type === 'file' && /resume|résumé|\bcv\b|curriculum/.test(text(f)))) score += 3;
+  else if (fields.some((f) => f.type === 'file')) score += 1;
+  if (has(/first.?name|given-name|full.?name|last.?name|family-name|\bname\b/)) score += 1;
+  if (has(/e-?mail/)) score += 1;
+  if (has(/phone|mobile|\btel\b/)) score += 1;
+  if (has(/linkedin|portfolio|github|website/)) score += 1;
+  if (has(/cover letter|work authori|sponsor|salary|notice period|start date|years of experience|why .*(join|work|interested)|relocat/)) score += 2;
+  if (ATS_HOSTS.test(url)) score += 2;
+  if (/\/(apply|application|careers?|jobs?)\b/i.test(url)) score += 1;
+  return { likely: fields.length >= 3 && score >= 5, score, fieldCount: fields.length, url };
+}
+
 const SENSITIVE_PATTERNS: RegExp[] = [
   /password|passcode/i,
   /\b(ssn|social security|national id|passport)\b/i,

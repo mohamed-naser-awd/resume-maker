@@ -7,6 +7,7 @@ import type { TailorResumeUseCase } from '@/application/TailorResumeUseCase';
 import type { DocumentTextExtractor } from '@/ports/DocumentTextExtractor';
 import type { LLMProvider } from '@/ports/LLMProvider';
 import type { PageGateway } from '@/ports/PageGateway';
+import type { PageEvents } from '@/ports/PageEvents';
 import type {
   AccomplishmentRepository,
   ChatRepository,
@@ -29,6 +30,7 @@ export const TOKENS = {
   extractor: token<DocumentTextExtractor>('DocumentTextExtractor'),
   renderer: token<ResumeRenderer>('ResumeRenderer'),
   page: token<PageGateway>('PageGateway'),
+  pageEvents: token<PageEvents>('PageEvents'),
   idGen: token<IdGenerator>('IdGenerator'),
   clock: token<Clock>('Clock'),
   // application

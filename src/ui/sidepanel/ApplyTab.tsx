@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TailorResult } from '@/application/TailorResumeUseCase';
 import { TOKENS } from '@/di/tokens';
-import type { AutofillResult } from '@/domain/form';
+import type { AutofillResult, FillPlan, FormDetection } from '@/domain/form';
+import type { FillMode } from '@/domain/settings';
+import { FillReview } from './FillReview';
 import type { JobPosting } from '@/domain/job';
 import { resumeToPlainText } from '@/domain/resume';
 import { ErrorBanner } from '../shared/ErrorBanner';
@@ -16,16 +18,26 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   const tailor = useService(TOKENS.tailor);
   const autofill = useService(TOKENS.autofill);
   const profiles = useService(TOKENS.profileService);
+  const settingsRepo = useService(TOKENS.settingsRepo);
+  const pageEvents = useService(TOKENS.pageEvents);
 
   const [job, setJob] = useState<JobPosting | null>(null);
   const [result, setResult] = useState<TailorResult | null>(null);
   const [fill, setFill] = useState<AutofillResult | null>(null);
   const [hasProfile, setHasProfile] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [plan, setPlan] = useState<FillPlan | null>(null);
+  const [detected, setDetected] = useState<FormDetection | null>(null);
+  const [fillMode, setFillMode] = useState<FillMode>('confirm');
 
   useEffect(() => {
     void profiles.get().then((p) => setHasProfile(!!p.sourceResumeText || p.experience.length > 0));
   }, [profiles]);
+
+  useEffect(() => {
+    void settingsRepo.get().then((s) => setFillMode(s.fillMode));
+    return settingsRepo.onChange((s) => setFillMode(s.fillMode));
+  }, [settingsRepo]);
 
   const detect = useAction(async () => {
     setResult(null);
@@ -37,9 +49,56 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
     setFill(null);
     setResult(await tailor.execute(job));
   });
-  const runFill = useAction(async () => {
-    setFill(await autofill.execute({ job, resumeDocument: result?.document ?? null }));
+  /** Job context helps the AI answer open questions; try the page silently if none is set. */
+  const jobContext = async () => {
+    if (job) return job;
+    const found = await jobs.detectFromPage().catch(() => null);
+    if (found) setJob(found);
+    return found;
+  };
+
+  // Fill button: "review first" prepares a plan; "automatic" fills straight away.
+  const runFill = useAction(async (mode: FillMode) => {
+    setFill(null);
+    setPlan(null);
+    const input = { job: await jobContext(), resumeDocument: result?.document ?? null };
+    if (mode === 'auto') setFill(await autofill.execute(input));
+    else setPlan(await autofill.prepare(input));
   });
+  const applyPlan = useAction(async (edited: FillPlan) => {
+    setFill(await autofill.apply(edited, result?.document ?? null));
+    setPlan(null);
+  });
+
+  // Watch the active tab: detect application forms (no AI) and auto-fill in automatic mode.
+  const latest = useRef({ fillMode, hasProfile, busy: false, run: runFill.run });
+  latest.current = { fillMode, hasProfile, busy: runFill.busy || applyPlan.busy, run: runFill.run };
+  useEffect(() => {
+    let timers: ReturnType<typeof setTimeout>[] = [];
+    const autoFilled = new Set<string>();
+    const unsubscribe = pageEvents.onActivePageReady(() => {
+      timers.forEach(clearTimeout);
+      setDetected(null);
+      // Forms on single-page apps render late, so check a few times.
+      timers = [800, 2500, 5000].map((delay) =>
+        setTimeout(async () => {
+          const d = await autofill.detectForm().catch(() => null);
+          if (!d?.likely) return;
+          timers.forEach(clearTimeout);
+          setDetected(d);
+          const s = latest.current;
+          if (s.fillMode === 'auto' && s.hasProfile && !s.busy && !autoFilled.has(d.url)) {
+            autoFilled.add(d.url);
+            void s.run('auto');
+          }
+        }, delay),
+      );
+    });
+    return () => {
+      unsubscribe();
+      timers.forEach(clearTimeout);
+    };
+  }, [pageEvents, autofill]);
 
   const pdfUrl = useMemo(
     () => (result ? URL.createObjectURL(new Blob([result.document.bytes as BlobPart], { type: result.document.mimeType })) : null),
@@ -47,7 +106,7 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
   );
   useEffect(() => () => void (pdfUrl && URL.revokeObjectURL(pdfUrl)), [pdfUrl]);
 
-  const anyBusy = detect.busy || generate.busy || runFill.busy;
+  const anyBusy = detect.busy || generate.busy || runFill.busy || applyPlan.busy;
 
   return (
     <>
@@ -121,16 +180,35 @@ export function ApplyTab({ onGoToProfile }: { onGoToProfile: () => void }) {
       </section>
 
       <section className="card">
-        <h2>3. Fill the application</h2>
+        <div className="row between">
+          <h2>3. Fill the application</h2>
+          <button className="btn small ghost" onClick={() => chrome.runtime.openOptionsPage()} title="Change in Settings">
+            Mode: {fillMode === 'auto' ? 'Automatic' : 'Review first'}
+          </button>
+        </div>
         <p className="muted small">
-          Open the application form, then fill it. Filled fields get a green outline, required ones left for you get an orange
-          outline. Nothing is submitted – review and submit yourself.
+          {fillMode === 'auto'
+            ? 'Application forms are filled automatically when detected while this panel is open. You can also fill any page with the button.'
+            : 'You review every value before anything is written to the page.'}{' '}
+          Filled fields get a green outline, required ones left for you an orange one. Nothing is ever submitted.
           {result ? ' The generated PDF is attached to the resume upload field.' : ' Generate a resume first to also attach it.'}
         </p>
-        <button className="btn primary" disabled={anyBusy || !hasProfile} onClick={() => runFill.run()}>
-          {runFill.busy ? <><span className="spinner" /> Filling form…</> : 'Fill this page'}
+        {detected && !plan && !fill && !runFill.busy && (
+          <div className="banner info">
+            <span>Application form detected on this page ({detected.fieldCount} fields).</span>
+          </div>
+        )}
+        <button className="btn primary" disabled={anyBusy || !hasProfile} onClick={() => runFill.run(fillMode)}>
+          {runFill.busy ? (
+            <><span className="spinner" /> {fillMode === 'auto' ? 'Filling form…' : 'Preparing answers…'}</>
+          ) : fillMode === 'auto' ? (
+            'Fill this page'
+          ) : (
+            'Review & fill this page'
+          )}
         </button>
-        <ErrorBanner error={runFill.error} onDismiss={runFill.clearError} onPermissionGranted={() => runFill.run()} />
+        <ErrorBanner error={runFill.error ?? applyPlan.error} onDismiss={() => (runFill.clearError(), applyPlan.clearError())} onPermissionGranted={() => runFill.run(fillMode)} />
+        {plan && <FillReview key={plan.items.map((i) => i.field.id).join()} plan={plan} busy={applyPlan.busy} onConfirm={(p) => applyPlan.run(p)} onCancel={() => setPlan(null)} />}
         {fill && <FillSummary fill={fill} />}
       </section>
     </>

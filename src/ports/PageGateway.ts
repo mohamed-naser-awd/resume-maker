@@ -17,6 +17,8 @@ export interface FillRequest {
 
 /** Access to the job page the user is looking at (the active browser tab). */
 export interface PageGateway {
+  /** URL of the active tab ("" if unknown). */
+  pageUrl(): Promise<string>;
   readJobPosting(): Promise<JobPosting>;
   scanForm(): Promise<FormField[]>;
   fillForm(request: FillRequest): Promise<FillReport>;

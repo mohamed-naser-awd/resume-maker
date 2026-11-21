@@ -1,6 +1,7 @@
 import { CompositeTextExtractor, DocxTextExtractor, PdfTextExtractor, PlainTextExtractor } from '@/infrastructure/extract/extractors';
 import { SettingsBackedLLMProvider } from '@/infrastructure/llm/LLMProviderFactory';
 import { ChromePageGateway } from '@/infrastructure/page/ChromePageGateway';
+import { ChromePageEvents } from '@/infrastructure/page/ChromePageEvents';
 import { PdfLibResumeRenderer } from '@/infrastructure/render/PdfLibResumeRenderer';
 import {
   ChromeLocalStore,
@@ -30,6 +31,7 @@ export function createBrowserContainer(): Container {
     .register(T.extractor, () => new CompositeTextExtractor([new PdfTextExtractor(), new DocxTextExtractor(), new PlainTextExtractor()]))
     .register(T.renderer, () => new PdfLibResumeRenderer())
     .register(T.page, () => new ChromePageGateway())
+    .register(T.pageEvents, () => new ChromePageEvents())
     .register(T.idGen, () => () => crypto.randomUUID())
     .register(T.clock, () => () => new Date());
   return registerApplication(c);

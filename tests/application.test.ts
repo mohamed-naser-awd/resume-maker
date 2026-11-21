@@ -152,3 +152,64 @@ describe('AutofillUseCase', () => {
     expect(res.skipped[0]!.reason).toBe('already-filled');
   });
 });
+
+describe('AutofillUseCase review flow', () => {
+  const setup = async () => {
+    const page = new FakePage(
+      [
+        field({ id: 'n', label: 'Full name' }),
+        field({ id: 'q', label: 'Why this role?', type: 'textarea', required: true }),
+        field({ id: 's', label: 'Salary expectations' }),
+      ],
+      { title: 'Engineer', company: 'Acme', location: '', description: 'x'.repeat(300), url: 'https://boards.greenhouse.io/acme/jobs/1' },
+    );
+    const llm = new FakeLLM([{ answers: [{ fieldId: 'q', value: 'I like it.' }, { fieldId: 's', value: '' }] }]);
+    const c = createTestContainer({ llm, page });
+    await c.resolve(T.profileRepo).save(sampleProfile());
+    return { c, page };
+  };
+
+  it('prepare() proposes values without touching the page', async () => {
+    const { c, page } = await setup();
+    const plan = await c.resolve(T.autofill).prepare({ job: null, resumeDocument: null });
+    expect(plan.items.map((i) => [i.field.id, i.value, i.source])).toEqual([
+      ['n', 'Jane Q Doe', 'profile'],
+      ['q', 'I like it.', 'ai'],
+      ['s', '', null],
+    ]);
+    expect(page.fills).toHaveLength(0);
+  });
+
+  it('apply() fills the edited plan and drops cleared items', async () => {
+    const { c, page } = await setup();
+    const uc = c.resolve(T.autofill);
+    const plan = await uc.prepare({ job: null, resumeDocument: null });
+    const edited = {
+      ...plan,
+      items: plan.items.map((i) => (i.field.id === 'q' ? { ...i, value: '' } : i.field.id === 's' ? { ...i, value: '120k' } : i)),
+    };
+    const res = await uc.apply(edited, null);
+    expect(page.fills[0]!.answers.map((a) => [a.fieldId, a.value])).toEqual([
+      ['n', 'Jane Q Doe'],
+      ['s', '120k'],
+    ]);
+    expect(page.fills[0]!.needsReview).toEqual([{ fieldId: 'q', frameId: 0 }]);
+    expect(res.report.filled).toBe(2);
+  });
+
+  it('detectForm() recognises an application form without calling the LLM', async () => {
+    const page = new FakePage(
+      [
+        field({ id: 'a', label: 'First name' }),
+        field({ id: 'b', label: 'Email', type: 'email' }),
+        field({ id: 'c', label: 'Phone', type: 'tel' }),
+        field({ id: 'd', label: 'Resume/CV', type: 'file' }),
+      ],
+      { title: '', company: '', location: '', description: '', url: 'https://jobs.lever.co/acme/123/apply' },
+    );
+    const llm = new FakeLLM();
+    const c = createTestContainer({ llm, page });
+    expect((await c.resolve(T.autofill).detectForm()).likely).toBe(true);
+    expect(llm.requests).toHaveLength(0);
+  });
+});

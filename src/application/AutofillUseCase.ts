@@ -1,9 +1,13 @@
 import {
+  detectApplicationForm,
   isResumeUploadField,
   isSensitiveField,
   matchOption,
   type AutofillResult,
   type FieldAnswer,
+  type FillPlan,
+  type FillPlanItem,
+  type FormDetection,
   type FormField,
   type SkippedField,
 } from '@/domain/form';
@@ -38,13 +42,26 @@ const fieldAnswersJsonSchema = toJsonSchema(fieldAnswersSchema);
 const MAX_AI_FIELDS = 60;
 
 /**
- * Scans the form, answers what it can from the profile, asks the LLM for the rest,
- * then fills the page. Never submits – the user reviews and clicks Submit.
+ * Autofill in two steps so the UI can offer "review first":
+ *   prepare() – scan the form and compute values (profile rules first, LLM for the rest). Page untouched.
+ *   apply()   – write the (possibly edited) values into the page. Never submits.
+ * execute() runs both for automatic mode.
  */
 export class AutofillUseCase {
   constructor(private readonly deps: AutofillDeps) {}
 
+  /** Cheap, AI-free check whether the active page looks like a job application form. */
+  async detectForm(): Promise<FormDetection> {
+    const [fields, url] = await Promise.all([this.deps.page.scanForm(), this.deps.page.pageUrl()]);
+    return detectApplicationForm(fields, url);
+  }
+
   async execute(input: AutofillInput): Promise<AutofillResult> {
+    const plan = await this.prepare(input);
+    return this.apply(plan, input.resumeDocument);
+  }
+
+  async prepare(input: AutofillInput): Promise<FillPlan> {
     const [fields, profile, accomplishments, settings] = await Promise.all([
       this.deps.page.scanForm(),
       this.deps.profiles.get(),
@@ -56,10 +73,9 @@ export class AutofillUseCase {
       throw new LLMError('bad-request', 'No form fields found on this page. Open the application form and try again.');
     }
 
-    const answers: FieldAnswer[] = [];
+    const items: FillPlanItem[] = [];
     const skipped: SkippedField[] = [];
     const forAi: FormField[] = [];
-    let attachment: RenderedDocument | null = null;
 
     for (const field of fields) {
       if (settings.skipSensitiveFields && isSensitiveField(field)) {
@@ -68,8 +84,7 @@ export class AutofillUseCase {
       }
       if (field.type === 'file') {
         if (isResumeUploadField(field) && settings.attachResumeOnFill && input.resumeDocument && !field.currentValue) {
-          answers.push({ fieldId: field.id, frameId: field.frameId, value: input.resumeDocument.fileName, source: 'resume-file' });
-          attachment = input.resumeDocument;
+          items.push({ field, value: input.resumeDocument.fileName, source: 'resume-file' });
         } else {
           skipped.push({ field, reason: 'unsupported' });
         }
@@ -80,22 +95,37 @@ export class AutofillUseCase {
         continue;
       }
       const direct = profileValueForField(field, profile);
-      if (direct) {
-        answers.push({ fieldId: field.id, frameId: field.frameId, value: direct, source: 'profile' });
-      } else {
-        forAi.push(field);
-      }
+      if (direct) items.push({ field, value: direct, source: 'profile' });
+      else forAi.push(field);
     }
 
     if (forAi.length) {
       const aiAnswers = await this.askLlm(forAi.slice(0, MAX_AI_FIELDS), candidateContext(profile, accomplishments), input.job);
       for (const field of forAi) {
         const value = aiAnswers.get(field.id);
-        if (value) answers.push({ fieldId: field.id, frameId: field.frameId, value, source: 'ai' });
-        else skipped.push({ field, reason: 'no-answer' });
+        items.push(value ? { field, value, source: 'ai' } : { field, value: '', source: null });
       }
     }
 
+    // Keep page order (scanner order) for a natural review list.
+    const order = new Map(fields.map((f, i) => [`${f.frameId}:${f.id}`, i]));
+    items.sort((a, b) => order.get(`${a.field.frameId}:${a.field.id}`)! - order.get(`${b.field.frameId}:${b.field.id}`)!);
+    return { items, skipped };
+  }
+
+  /** Fills the page with the plan's non-empty items (the UI may have edited or removed some). */
+  async apply(plan: FillPlan, resumeDocument: RenderedDocument | null): Promise<AutofillResult> {
+    const answers: FieldAnswer[] = [];
+    const skipped: SkippedField[] = [...plan.skipped];
+    for (const item of plan.items) {
+      const value = item.value.trim();
+      if (value && !(item.source === 'resume-file' && !resumeDocument)) {
+        answers.push({ fieldId: item.field.id, frameId: item.field.frameId, value, source: item.source ?? 'profile' });
+      } else {
+        skipped.push({ field: item.field, reason: 'no-answer' });
+      }
+    }
+    const attachment = answers.some((a) => a.source === 'resume-file') ? resumeDocument : null;
     const needsReview = skipped
       .filter((s) => s.field.required && s.reason !== 'already-filled')
       .map((s) => ({ fieldId: s.field.id, frameId: s.field.frameId }));

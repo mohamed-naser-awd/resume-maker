@@ -6,6 +6,26 @@ Helps you apply to jobs:
 - **Accomplishments chat**: tell the bot what you've done that isn't on your resume ("I led retros and sprint planning for a team of 6"). It turns each item into a resume bullet and saves it.
 - **Apply**: on a job page, detect the posting → generate an **ATS-friendly PDF resume** tailored to that job (with a keyword-coverage check) → **fill the application form**. Filled fields get a green outline, required fields left for you get an orange one. It **never submits**.
 
+### Fill modes (Settings → Autofill)
+
+- **Review first** (default): *Review & fill this page* shows every proposed value. Edit, untick, or type answers for empty fields, then press *Fill*. Nothing on the page changes before that.
+- **Automatic**: while the side panel is open, a job application form is filled as soon as it is detected (once per page). *Fill this page* fills immediately.
+
+In both modes the Fill button works on any page, and nothing is ever submitted.
+
+**Form detection** uses heuristics, not AI (`detectApplicationForm` in `src/domain/form.ts`). It scores the scanned fields (resume upload, name/email/phone, questions like sponsorship or salary) and the URL (known ATS hosts such as Greenhouse, Lever, Workday and Ashby, or `/apply` / `/careers` paths), so login, search and newsletter forms are ignored.
+
+### When AI is called
+
+| Action | AI call | What is sent |
+|---|---|---|
+| Upload resume | 1 per upload | Extracted resume text |
+| Chat message | 1 per message | Recent chat, your role list, saved accomplishments |
+| Generate resume | 1 per job | Profile JSON, accomplishments, job description text (max 20k chars) |
+| Fill form | 0–1 per fill | Only fields not answerable from the profile: id, label, type, options. Name, email, phone, links, city and current role are filled without AI |
+
+Page HTML is never sent. Job detection, form scanning, filling, the ATS check and PDF rendering run locally.
+
 Everything is stored locally in `chrome.storage.local`. Your API key is entered on the Settings page and never lives in the code.
 
 ## Setup

@@ -42,6 +42,9 @@ export class FakePage implements PageGateway {
     public fields: FormField[] = [],
     public job: JobPosting = { title: 'Engineer', company: 'Acme', location: '', description: 'x'.repeat(300), url: 'https://acme.test/job' },
   ) {}
+  async pageUrl() {
+    return this.job.url;
+  }
   async readJobPosting() {
     return this.job;
   }

@@ -116,6 +116,34 @@ export function OptionsApp() {
 
       <section className="card">
         <h2>Autofill</h2>
+        <div className="stack">
+          <span className="small muted">Fill mode</span>
+          <label className="check">
+            <input type="radio" name="fillMode" checked={settings.fillMode === 'confirm'} onChange={() => update({ fillMode: 'confirm' })} />
+            <span>
+              <strong>Review first</strong> (recommended) – the Fill button shows every proposed answer; you edit and confirm before
+              anything is written to the page.
+            </span>
+          </label>
+          <label className="check">
+            <input
+              type="radio"
+              name="fillMode"
+              checked={settings.fillMode === 'auto'}
+              onChange={async () => {
+                update({ fillMode: 'auto' });
+                if (!siteAccess) setSiteAccess(await requestAllSitesAccess());
+              }}
+            />
+            <span>
+              <strong>Automatic</strong> – when the side panel is open and a job application form is detected, it is filled right
+              away (once per page). The Fill button fills immediately. Still never submits.
+            </span>
+          </label>
+          {settings.fillMode === 'auto' && !siteAccess && (
+            <div className="banner warn">Automatic mode needs page access (see “Page access” below) to detect forms as you browse.</div>
+          )}
+        </div>
         <label className="check">
           <input
             type="checkbox"
@@ -143,7 +171,8 @@ export function OptionsApp() {
         <h2>Page access</h2>
         <p className="muted small">
           To read job postings and fill forms (including forms embedded in iframes), Resume Maker needs access to the pages you
-          use it on. It only runs when you press a button in the side panel and never submits forms.
+          use it on. It reads pages only while the side panel is open (and in Review mode only fills when you confirm). It never
+          submits forms.
         </p>
         {siteAccess ? (
           <div className="banner success">Access granted for all sites.</div>

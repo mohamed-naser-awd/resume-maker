@@ -5,8 +5,16 @@ export interface ProviderSettings {
   model: string;
 }
 
+/**
+ * confirm: "Fill" shows the proposed values for review; nothing changes until you confirm.
+ * auto:    application forms are filled as soon as they are detected (side panel open),
+ *          and "Fill" fills immediately.
+ */
+export type FillMode = 'confirm' | 'auto';
+
 export interface Settings {
   provider: ProviderId;
+  fillMode: FillMode;
   providers: Record<ProviderId, ProviderSettings>;
   /** Never fill EEO/demographic/secret fields. On by default. */
   skipSensitiveFields: boolean;
@@ -21,6 +29,7 @@ export const DEFAULT_MODELS: Record<ProviderId, string> = {
 
 export const defaultSettings = (): Settings => ({
   provider: 'claude',
+  fillMode: 'confirm',
   providers: {
     claude: { apiKey: '', model: DEFAULT_MODELS.claude },
     openai: { apiKey: '', model: DEFAULT_MODELS.openai },

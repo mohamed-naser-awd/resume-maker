@@ -4,7 +4,7 @@ import { Container, token } from '@/di/container';
 import { LLMError } from '@/domain/errors';
 import { defaultSettings } from '@/domain/settings';
 import { assessAts } from '@/domain/ats-rules';
-import { isSensitiveField, matchOption } from '@/domain/form';
+import { detectApplicationForm, isSensitiveField, matchOption, type FormField } from '@/domain/form';
 import type { TailoredResume } from '@/domain/resume';
 import { toJsonSchema, tailoredResumeSchema } from '@/application/schemas';
 import { SettingsBackedLLMProvider } from '@/infrastructure/llm/LLMProviderFactory';
@@ -118,5 +118,18 @@ describe('domain rules', () => {
 
   it('LLMError carries its kind', () => {
     expect(new LLMError('auth', 'x').kind).toBe('auth');
+  });
+});
+
+describe('detectApplicationForm', () => {
+  const f = (label: string, type: FormField['type'] = 'text'): FormField => ({
+    id: label, frameId: 0, type, label, name: '', placeholder: '', autocomplete: '', required: false, options: [], currentValue: '',
+  });
+  it('accepts application forms and rejects login/newsletter/search forms', () => {
+    expect(detectApplicationForm([f('Name'), f('Email', 'email'), f('Phone', 'tel'), f('Resume', 'file')], 'https://acme.com/careers/42').likely).toBe(true);
+    expect(detectApplicationForm([f('Name'), f('Email'), f('Do you require visa sponsorship?')], 'https://acme.workable.com/j/1').likely).toBe(true);
+    expect(detectApplicationForm([f('Email', 'email'), f('Remember me', 'checkbox')], 'https://acme.com/login').likely).toBe(false);
+    expect(detectApplicationForm([f('Name'), f('Email', 'email'), f('Subscribe', 'checkbox')], 'https://blog.example.com').likely).toBe(false);
+    expect(detectApplicationForm([f('Search jobs'), f('Location')], 'https://www.linkedin.com/jobs/search').likely).toBe(false);
   });
 });
